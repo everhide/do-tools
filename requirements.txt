@@ -1,0 +1,6 @@
+fire==0.4.0
+kubernetes==21.7.0
+humanize==3.13.1
+rich==10.16.1
+pytz==2021.3
+yarl==1.7.2
