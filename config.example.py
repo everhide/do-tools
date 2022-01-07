@@ -1,11 +1,17 @@
 from dot import Config, DBConf, Env
 
-DIGITAL_OCEAN = 'postgresql-{0}-xxxxx-0.yyyyy.db.ondigitalocean.com'
+config = Config()
 
-config = Config(secret_dir='/absolute/path/to/your/.secrets')
-config.ca_cert = 'ca-certificate.crt'
-config.k8s = {Env.STAGE: 'k8s-stage.yaml', Env.PROD: 'k8s-prod.yaml'}
+# ca-certificate path:
+config.ca_cert = '/path/to/ca-certificate.crt'
 
+# K8S yaml configs:
+config.k8s = {
+    Env.STAGE: '/path/to/k8s-stage.yaml',
+    Env.PROD: '/path/to/k8s-prod.yaml',
+}
+
+# Local postgres:
 config.pg_conf = DBConf(
     host='localhost',
     name='postgres',
@@ -14,23 +20,24 @@ config.pg_conf = DBConf(
     port=5432,
 )
 
+# Remote postgres:
 config.pull = {
     Env.STAGE: {
         'exchange': DBConf(
-            host=DIGITAL_OCEAN.format('common-stage'),
-            name='rest_api',
+            host='db.host.stage',
+            name='name',
             password='***********',
-            user='rest_api',
-            port=25060,
+            user='user',
+            port=5432,
         ),
     },
     Env.PROD: {
         'exchange': DBConf(
-            host=DIGITAL_OCEAN.format('common-prod'),
-            name='rest_api_prod',
+            host='db.host.prod',
+            name='name',
             password='***********',
-            user='rest_api_prod',
-            port=25060,
+            user='user',
+            port=5432,
         ),
     },
 }

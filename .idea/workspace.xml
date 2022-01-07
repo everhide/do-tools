@@ -2,9 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="5d700fa2-898c-464b-a73c-55766f847109" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config.example.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.example.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -26,7 +25,7 @@
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../dot" />
   </component>
   <component name="SvnConfiguration">
     <configuration />
@@ -39,11 +38,17 @@
       <option name="presentableId" value="Default" />
       <updated>1639757278830</updated>
       <workItem from="1639757280251" duration="95000" />
-      <workItem from="1641526548110" duration="20000" />
+      <workItem from="1641526548110" duration="1287000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="2" />
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="743" y="282" width="430" height="491" key="FileChooserDialogImpl" timestamp="1641528111614">
+      <screen x="0" y="0" width="1920" height="1046" />
+    </state>
+    <state x="743" y="282" width="430" height="491" key="FileChooserDialogImpl/0.0.1920.1046@0.0.1920.1046" timestamp="1641528111614" />
   </component>
 </project>
