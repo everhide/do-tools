@@ -1,8 +1,8 @@
 .secrets
 .cache
 
-config.lin.py
-config.win.py
+.draft
+
 config.py
 
 dot.yml
@@ -10,7 +10,7 @@ dot.bat
 dot.sh
 
 __pycache__/
-.draft
+
 draft
 drafs
 test.py
