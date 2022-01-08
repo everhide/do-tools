@@ -32,7 +32,8 @@ def windows():
             dot_file.write(f'{line}\n')
         dot_file.close()
 
-    subprocess.run(['setx', '-M', 'PATH', f'%PATH%;{app_dir()};'])
+    # subprocess.run(['setx', '-M', 'PATH', f'%PATH%;{app_dir()};'])
+    subprocess.run(['set', 'PATH', f'%PATH%;%CD%'])
 
 
 def make_executable(path):
