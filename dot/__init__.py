@@ -7,13 +7,14 @@ class Cmd(Executor):
     def check_db_alias(self, alias: str) -> None:
         """Check alias."""
         try:
-            env_pulls = self.config.pull[Env(self.env)].keys()
-        except Exception as _alias_err:
-            self._error(Error.error(Error.ENV_INVALID, [Env]))
+            pull: Dict = self.config[self.env]['pull']
+        except (AttributeError, KeyError, TypeError, NameError):
+            self._error(Error.error(Error.DB_PULL_EMPTY))
             sys.exit(1)
 
-        if alias not in env_pulls:
-            self._error(Error.found(alias, [_pull for _pull in env_pulls]))
+        available = [_db for _db in pull.keys()]
+        if alias not in available:
+            self._error(Error.found(alias, available))
             sys.exit(1)
 
     def pull(self, alias: str) -> None:

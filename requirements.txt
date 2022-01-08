@@ -4,3 +4,5 @@ humanize==3.13.1
 rich==10.16.1
 pytz==2021.3
 yarl==1.7.2
+pydantic==1.9.0
+piny==0.6.0

@@ -3,7 +3,6 @@ import sys
 import yaml
 
 from base64 import b64decode
-from collections import namedtuple
 from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
 from enum import Enum
@@ -14,6 +13,9 @@ from subprocess import Popen, PIPE, STDOUT
 import shlex
 
 from humanize import naturaltime as verbose_time
+
+from pydantic import BaseModel
+from piny import PydanticValidator, StrictMatcher, YamlLoader
 
 import psycopg
 
@@ -31,22 +33,35 @@ from kubernetes.config.config_exception import ConfigException
 
 
 HANG = 'IDpkb2c6IFtkaW0gc3RlZWxfYmx1ZTFdIFBhbmluIGJsZXNzIHlvdSwgYnllIQ=='
-DBConf = namedtuple('DBConf', 'host user password port name')
+
+
+class DBModel(BaseModel):
+    """DB Model."""
+
+    host: str
+    name: str
+    user: str
+    password: str
+    port: int
+
+
+class EnvModel(BaseModel):
+    """Env model."""
+
+    k8s: str
+    pull: Dict[str, DBModel]
+
+
+class ConfigModel(BaseModel):
+    """Config model."""
+
+    pg_local: DBModel
+    stage: EnvModel
+    prod: EnvModel
 
 
 class DotError(Exception):
     """Dot error."""
-
-
-class Config:
-    """Dot config."""
-
-    def __init__(self):
-        """Init."""
-        self.ca_cert: str = None
-        self.k8s: Dict[str, str] = None
-        self.pg_conf: DBConf = None
-        self.pull: Dict[str: Dict[str, DBConf]]
 
 
 @dataclass
@@ -129,9 +144,11 @@ class Error(Enum):
 
     CRITICAL = 'Terminated: {0}'
 
-    CFG_NOT_IMPORTED = 'Config not found'
+    CFG_NOT_LOADED = 'Config not loaded: {0}'
 
-    DB_REMOTE_CFG_LOAD = 'Postgres remote config not loaded: {0}'
+    DB_PULL_EMPTY = 'Pull configuration not found'
+    DB_PULL_NOT_FOUND = 'Not found pull configuration, try: {0}'
+    DB_REMOTE_CFG_FOUND = 'Postgres remote config not found: {0}'
     DB_LOCAL_CFG_LOAD = 'Postgres local config not loaded: {0}'
     DB_PG = 'Postgres error: {0}'
     DB_PREPARE_LOCAL = 'Prepare local database: {0}'
@@ -210,12 +227,12 @@ class Exec:
         return Popen(shlex.split(command), **kwargs)
 
     @staticmethod
-    def process_dump(cfg: DBConf, path: str) -> Type[Popen]:
+    def process_dump(cfg: Dict, path: str) -> Type[Popen]:
         """POpen dump process."""
         cmd = Exec.cmd_dump()
         return Exec._process(
-            cmd.format(cfg.user, cfg.host, cfg.port, cfg.name, path),
-            **{'env': {'PGPASSWORD': cfg.password}},
+            cmd.format(cfg['user'], cfg['host'], cfg['port'], cfg['name'], path),
+            **{'env': {'PGPASSWORD': cfg['password']}},
         )
 
     @staticmethod
@@ -227,10 +244,10 @@ class Exec:
             Status.pull_update(ref, _opts)
 
     @staticmethod
-    def process_restore(cfg: DBConf, alias, path: str) -> Type[Popen]:
+    def process_restore(cfg: Dict, alias, path: str) -> Type[Popen]:
         """POpen restore process."""
         cmd = Exec.cmd_restore()
-        return Exec._process(cmd.format(cfg.user, cfg.host, alias, path))
+        return Exec._process(cmd.format(cfg['user'], cfg['host'], alias, path))
 
     @staticmethod
     def capture_restore(proc: Popen, env: str, ref: RS) -> None:
@@ -245,26 +262,25 @@ class Exec:
         name: str,
         info: AppInfo,
         env: str,
-        k8s_file: str,
+        k8s: str,
     ) -> Type[Popen]:
-        """POpen get config process."""
+        """POpen config process."""
         cmd = Exec.cmd_config()
         return Exec._process(
-            cmd.format(k8s_file, env, info.alias, name, 'cat ./config.yml'),
+            cmd.format(k8s, env, info.alias, name, 'cat ./config.yml'),
         )
 
     @staticmethod
     def process_log(
         name: str,
         env: str,
-        k8s_file: str,
+        k8s: str,
         hours: int = 24,
     ) -> Type[Popen]:
-        """POpen get config process."""
+        """POpen log process."""
         cmd = Exec.cmd_log()
-        zz = cmd.format(k8s_file, env, name, hours)
-        print('###', zz)
-        return Exec._process(cmd.format(k8s_file, env, name, hours))
+        zz = cmd.format(k8s, env, name, hours)
+        return Exec._process(cmd.format(k8s, env, name, hours))
 
 
 class Status(Enum):
@@ -352,12 +368,17 @@ def create_panel(
     return Panel(f'{_lb} {_cnt}', style=_style, box=box.HEAVY)
 
 
-dba = lambda env, alias: f'{env}_{alias}'
+def dba(env: str, alias: str) -> str:
+    """Return dba."""
+    return f'{env}_{alias}'
 
 
 def dba_file(workdir: str, real_db_name: str) -> str:
     """Real db path."""
-    path = Path(workdir) / '.cache' / f'{real_db_name}.tar.gz'
+    _cache_dir = Path(workdir) / '.cache'
+    if not Path(_cache_dir).exists():
+        os.makedirs(_cache_dir)
+    path = _cache_dir / f'{real_db_name}.tar.gz'
     return path.as_posix()
 
 
@@ -521,12 +542,11 @@ class Executor:
         """Init."""
         self.env: str = env
         self.term_envs = {'stage': TERM_STAGE, 'prod': TERM_PROD}
-        self.console: Console = None
-        self.config = self._config()
+        self.console: Console = self._init_console()
+        self.config: Dict = self._load_config()
 
     def __enter__(self):
         """On enter."""
-        self._init_console()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -538,22 +558,58 @@ class Executor:
     @property
     def app_dir(self) -> str:
         """Get app dir."""
-        return os.environ.get(
-            'APP_DIR',
+        return Path(
             os.path.dirname(os.path.realpath(__file__)),
-        )
+        ).parent.as_posix()
 
-    def _init_console(self) -> None:
+    @property
+    def k8s_path(self) -> str:
+        """Get k8s path."""
+        try:
+            _k8s_path = self.config[self.env]['k8s']
+        except (AttributeError, ValueError, TypeError):
+            self._error(Error.error(Error.K8_ENV_NOT_FOUND))
+            sys.exit(1)
+        if not Path(_k8s_path).exists():
+            self._error(Error.error(Error.K8_ENV_NOT_FOUND))
+        return _k8s_path
+
+    @property
+    def k8s_client(self) -> CoreV1Api:
+        """Get k8s client."""
+        try:
+            load_kube_config(config_file=self.k8s_path)
+        except ConfigException as _conf_err:
+            self._error(Error.error(Error.K8_ENV_CONF_LOAD, [_conf_err]))
+        return CoreV1Api()
+
+    @property
+    def pg_local(self) -> Dict:
+        """PG local config."""
+        try:
+            return self.config['pg_local']
+        except (AttributeError, TypeError, KeyError, ValueError) as _err:
+            self._error(Error.error(Error.DB_LOCAL_CFG_LOAD, [_err]))
+
+    def _pg_remote(self, alias: str) ->  Dict[str, Dict]:
+        """PG remote config."""
+        try:
+            return self.config[self.env]['pull'][alias]
+        except (AttributeError, ValueError, TypeError):
+            self._error(Error.error(Error.DB_REMOTE_CFG_FOUND))
+            sys.exit(1)
+
+    def _init_console(self) -> Console:
         """Init console."""
-        self.console = Console(stderr=True)
-
+        console = Console(stderr=True)
         envs = [_env for _env in self.term_envs.keys()]
         if self.env not in envs:
             self._error(Error.found(self.env, envs))
             sys.exit(1)
 
         theme = Theme(self.term_envs[self.env])
-        self.console.use_theme(theme)
+        console.use_theme(theme)
+        return  console
 
     def _error(self, err_content):
         """Critical error."""
@@ -565,14 +621,18 @@ class Executor:
         self.console.print(Msg.hang())
         return True
 
-    def _config(self):
-        """Load config."""
+    def _load_config(self) -> Dict:
+        """Load dot config."""
         try:
-            from config import config as load_conf
-        except ImportError:
-            self._error(Error.error(Error.CFG_NOT_IMPORTED))
+            return YamlLoader(
+                path=Path(self.app_dir).absolute() / 'config.yml',
+                matcher=StrictMatcher,
+                validator=PydanticValidator,
+                schema=ConfigModel,
+            ).load()
+        except Exception as _cfg_err:
+            self._error(Error.error(Error.CFG_NOT_LOADED, [_cfg_err]))
             sys.exit(1)
-        return load_conf
 
     # [ Postgres ] ------------------------------------------------------------
 
@@ -593,19 +653,19 @@ class Executor:
         if Path(real_dump_path).exists():
             os.remove(real_dump_path)
 
-    def _get_local_pg_connection(self) -> psycopg.Connection:
+    def _pg_connection(self) -> psycopg.Connection:
         """Get local psycopg connection."""
         return psycopg.connect(
-            dbname=self.config.pg_conf.name,
-            user=self.config.pg_conf.user,
-            password=self.config.pg_conf.password,
-            host=self.config.pg_conf.host,
+            dbname=self.pg_local.get('name'),
+            user=self.pg_local.get('user'),
+            password=self.pg_local.get('password'),
+            host=self.pg_local.get('host'),
             autocommit=True,
         )
 
     def _create_and_drop_exist(self, real_name: str) -> None:
         """Create database and drop if exist."""
-        with self._get_local_pg_connection() as connection:
+        with self._pg_connection() as connection:
             with connection.cursor() as cursor:
                 try:
                     cursor.execute("CREATE DATABASE %s;" % real_name)
@@ -616,24 +676,10 @@ class Executor:
                 except Exception as _err:
                     self._error(Error.error(Error.DB_PREPARE_LOCAL, [_err]))
 
-    def _remote_pg_conf(self, alias) -> DBConf:
-        """Get remote pg conf."""
-        try:
-            return self.config.pull[Env(self.env)][alias]
-        except Exception as _err:
-            self._error(Error.error(Error.DB_REMOTE_CFG_LOAD, [_err]))
-
-    def _local_pg_conf(self, alias) -> DBConf:
-        """Get local pg conf."""
-        try:
-            return self.config.pg_conf
-        except Exception as _err:
-            self._error(Error.error(Error.DB_LOCAL_CFG_LOAD, [_err]))
-
     def _dump(self, alias: str, real_path: str, ref) -> None:
-        """Download pg dump."""
+        """Dump database."""
         _proc: Popen = Exec.process_dump(
-            cfg=self._remote_pg_conf(alias),
+            cfg=self._pg_remote(alias),
             path=real_path,
         )
 
@@ -645,12 +691,13 @@ class Executor:
             _proc.wait(3)
 
     def _restore(self, alias: str, real_alias: str, ref) -> None:
-        """Restore pulled database to local."""
+        """Restore database."""
         _proc: Popen = Exec.process_restore(
-            cfg=self._local_pg_conf(alias),
+            cfg=self.pg_local,
             alias=real_alias,
             path=dba_file(self.app_dir, real_alias),
         )
+
         try:
             Exec.capture_restore(_proc, self.env, ref)
         finally:
@@ -658,34 +705,9 @@ class Executor:
 
     # [ K8S ] -----------------------------------------------------------------
 
-    def _get_k8s_path(self) -> Optional[str]:
-        """Get k8s conf path for env."""
-        try:
-            _k8s_env_file = self.config.k8s[Env(self.env)]
-        except (AttributeError, ValueError, TypeError):
-            self._error(Error.error(Error.K8_ENV_NOT_FOUND))
-            sys.exit(1)
-
-        if not Path(_k8s_env_file).exists():
-            self._error(Error.error(Error.K8_ENV_NOT_FOUND))
-        return _k8s_env_file
-
-    def _get_k8s_client(self) -> CoreV1Api:
-        """Get k8s client."""
-        try:
-            load_kube_config(config_file=self._get_k8s_path())
-        except ConfigException as _conf_err:
-            self._error(Error.error(Error.K8_ENV_CONF_LOAD, [_conf_err]))
-        return CoreV1Api()
-
     def _show_apps(self) -> Dict[str, Dict]:
-        """Get apps."""
-        k8s = self._get_k8s_client()
-        k8s_apps_info(
-            k8s=k8s,
-            console=self.console,
-            env=self.env,
-        )
+        """Show apps."""
+        k8s_apps_info(k8s=self.k8s_client, console=self.console, env=self.env)
 
     def _check_app_name(self, name: str, available: List) -> None:
         """Check app name."""
@@ -695,40 +717,29 @@ class Executor:
 
     def _show_app_config(self, name: str) -> None:
         """Show app config."""
-        k8s = self._get_k8s_client()
-        _apps: Dict[str, AppInfo] = k8s_apps(k8s=k8s, env=self.env)
+        _apps: Dict[str, AppInfo] = k8s_apps(k8s=self.k8s_client, env=self.env)
         self._check_app_name(name, _apps.keys())
 
         _info: AppInfo = _apps[name]
-
         _proc = Exec.process_config(
             name=name,
             info=_info,
             env=self.env,
-            k8s_file=self._get_k8s_path(),
+            k8s=self.k8s_path,
         )
 
         with _proc.stdout as stdin:
-            buffed = yaml.safe_load(
-                ''.join(
-                    [_buf.decode() for _buf in iter(stdin.readline, b'')]
-                ),
+            buff = yaml.safe_load(
+                ''.join([_bf.decode() for _bf in iter(stdin.readline, b'')]),
             )
-            self.console.print(buffed, style=Color.DEF.value)
+            self.console.print(buff, style=Color.DEF.value)
 
     def _show_app_log(self, name: str) -> None:
         """Show app log."""
-        k8s = self._get_k8s_client()
-        _apps: Dict[str, AppInfo] = k8s_apps(k8s=k8s, env=self.env)
+        _apps: Dict[str, AppInfo] = k8s_apps(k8s=self.k8s_client, env=self.env)
         self._check_app_name(name, _apps.keys())
-
         _info: AppInfo = _apps[name]
-
-        _proc = Exec.process_log(
-            name=name,
-            env=self.env,
-            k8s_file=self._get_k8s_path(),
-        )
+        _proc = Exec.process_log(name=name, env=self.env, k8s=self.k8s_path)
 
         try:
             with _proc.stdout:

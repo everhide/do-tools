@@ -3,8 +3,9 @@ PYTHON = $(ENV)/bin/python3
 PIP = $(ENV)/bin/pip
 
 run: clean $(ENV)/bin/activate
-	$(PIP) install wheel
 	$(PIP) install --upgrade pip
+	$(PIP) install wheel
+	$(PIP) install piny
 	$(PIP) install psycopg[binary]
 	$(PIP) install -r requirements.txt
 	python install.py
