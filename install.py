@@ -2,6 +2,7 @@ import sys
 from os import environ, stat, chmod
 from os.path import dirname, realpath
 from os import remove
+from shutil import copyfile
 from pathlib import Path
 import subprocess
 
@@ -80,6 +81,10 @@ def install() -> None:
         windows()
     else:
         linux()
+
+    conf_path = Path(app_dir()) / 'config.yml'
+    if not Path(conf_path).exists():
+        copyfile(Path(app_dir()) / 'config.example.yml', conf_path)
 
 
 install()

@@ -28,6 +28,9 @@ class Cmd(Executor):
         finally:
             self._clean_temporary(alias)
 
+        _text = Msg.pull_info(self.env, alias, f'local/{dba(self.env, alias)}')
+        self.console.print(Msg.info(_text, self.env))
+
     def tail_log(self, app: str, hours=24) -> None:
         """Tail app log."""
         self._show_app_log(name=app)

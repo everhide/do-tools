@@ -1,0 +1,36 @@
+pg_local:
+  host: 'localhost'
+  name: 'postgres'
+  user: 'postgres'
+  password: 'postgres'
+  port: 5432
+stage:
+  k8s: '/path/to/k8s-stage.yaml'
+  pull:
+    exchange:
+      host: 'postgresql.db.ondigitalocean.com'
+      name: 'rest_api'
+      user: 'rest_api'
+      password: '*************'
+      port: 25060
+    openapi:
+      host: 'postgresql.db.ondigitalocean.com'
+      name: 'stage_open_api'
+      user: 'open_api'
+      password: '*************'
+      port: 25060
+prod:
+  k8s: '/path/to/k8s-prod.yaml'
+  pull:
+    exchange:
+      host: 'postgresql.db.ondigitalocean.com'
+      name: 'rest_api_prod'
+      user: 'rest_api_prod'
+      password: '*************'
+      port: 25060
+    openapi:
+      host: 'postgresql.db.ondigitalocean.com'
+      name: 'openapi_prod'
+      user: 'openapi_prod'
+      password: '*************'
+      port: 25060

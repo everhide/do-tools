@@ -240,7 +240,10 @@ class Exec:
         """Capture dump."""
         _opts = {'header': Msg.DOWNLOAD.value, 'env': env, 'rem': 'pg_dump:'}
         for outline in iter(proc.stdout.readline, b''):
-            _opts.update({'text': str(outline.decode())})
+            buff = str(outline.decode())
+            if 'error:' in buff:
+                raise DotError('Check pull connection params')
+            _opts.update({'text': buff})
             Status.pull_update(ref, _opts)
 
     @staticmethod
@@ -588,14 +591,14 @@ class Executor:
         """PG local config."""
         try:
             return self.config['pg_local']
-        except (AttributeError, TypeError, KeyError, ValueError) as _err:
+        except Exception as _err:
             self._error(Error.error(Error.DB_LOCAL_CFG_LOAD, [_err]))
 
     def _pg_remote(self, alias: str) ->  Dict[str, Dict]:
         """PG remote config."""
         try:
             return self.config[self.env]['pull'][alias]
-        except (AttributeError, ValueError, TypeError):
+        except Exception:
             self._error(Error.error(Error.DB_REMOTE_CFG_FOUND))
             sys.exit(1)
 
@@ -645,8 +648,6 @@ class Executor:
             self._create_and_drop_exist(_dba)
             self._dump(alias, _file, status)
             self._restore(alias, _dba, status)
-            _text = Msg.pull_info(self.env, alias, f'local/{_dba}')
-            self.console.print(Msg.info(_text, self.env))
 
     def _clean_temporary(self, real_dump_path: str) -> None:
         """Clean temporary."""
