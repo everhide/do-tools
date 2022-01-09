@@ -3,6 +3,7 @@
 
 .draft
 
+config.yml
 config.py
 
 dot.yml
