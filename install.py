@@ -22,7 +22,7 @@ def windows():
 
     file_commands = [
         f'@echo off',
-        f'set APP_DIR="{app_dir()}"',
+        f'set APP_DIR={app_dir()}',
         r'set VENV=%APP_DIR%venv',
         r'call %VENV%\Scripts\activate & python -u "%APP_DIR%dot.py" %*',
     ]
@@ -31,9 +31,6 @@ def windows():
         for line in file_commands:
             dot_file.write(f'{line}\n')
         dot_file.close()
-
-    # subprocess.run(['setx', '-M', 'PATH', f'%PATH%;{app_dir()};'])
-    subprocess.run(['set', 'PATH', f'%PATH%;%CD%'])
 
 
 def make_executable(path):
