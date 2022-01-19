@@ -5,7 +5,7 @@
 - Show k8s app log realtime
 - Show k8s app config
 - Sync databases
-- Supported OS: Linux, Windows  (Mac OS should works as Linux, but not tested)
+- Supported OS: Linux (Mac OS should works as Linux, but not tested)
 
 
 #### Install 
